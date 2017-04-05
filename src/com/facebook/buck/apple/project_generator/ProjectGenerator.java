@@ -73,11 +73,13 @@ import com.facebook.buck.apple.xcode.xcodeproj.ProductTypes;
 import com.facebook.buck.apple.xcode.xcodeproj.SourceTreePath;
 import com.facebook.buck.apple.xcode.xcodeproj.XCBuildConfiguration;
 import com.facebook.buck.apple.xcode.xcodeproj.XCVersionGroup;
+import com.facebook.buck.cxx.AbstractPrebuiltCxxLibraryGroupDescription;
 import com.facebook.buck.cxx.CxxDescriptionEnhancer;
 import com.facebook.buck.cxx.CxxLibraryDescription;
 import com.facebook.buck.cxx.CxxLibraryDescription.CommonArg;
 import com.facebook.buck.cxx.CxxPrecompiledHeaderTemplate;
 import com.facebook.buck.cxx.CxxSource;
+import com.facebook.buck.cxx.PrebuiltCxxLibraryGroupDescription;
 import com.facebook.buck.cxx.toolchain.CxxBuckConfig;
 import com.facebook.buck.cxx.toolchain.CxxPlatform;
 import com.facebook.buck.cxx.toolchain.HasSystemFrameworkAndLibraries;
@@ -119,6 +121,7 @@ import com.facebook.buck.rules.SourcePathRuleFinder;
 import com.facebook.buck.rules.TargetGraph;
 import com.facebook.buck.rules.TargetNode;
 import com.facebook.buck.rules.args.Arg;
+import com.facebook.buck.rules.args.SourcePathArg;
 import com.facebook.buck.rules.args.StringArg;
 import com.facebook.buck.rules.coercer.FrameworkPath;
 import com.facebook.buck.rules.coercer.PatternMatchedCollection;
@@ -1479,6 +1482,7 @@ public class ProjectGenerator {
                             targetNode.getConstructorArg().getLinkerFlags(),
                             collectRecursiveExportedLinkerFlags(targetNode))))
                 .addAll(swiftDebugLinkerFlagsBuilder.build())
+                .addAll(collectPrebuiltCxxLibraryGroupLinkerFlags(targetNode))
                 .build();
 
         appendConfigsBuilder
@@ -3065,6 +3069,45 @@ public class ProjectGenerator {
                     .castArg(CxxLibraryDescription.CommonArg.class)
                     .map(input1 -> input1.getConstructorArg().getExportedLinkerFlags())
                     .orElse(ImmutableList.of()))
+        .toList();
+  }
+
+  private ImmutableList<String> collectPrebuiltCxxLibraryGroupLinkerFlags(
+      TargetNode<?, ?> targetNode) {
+    return FluentIterable.from(
+            AppleBuildRules.getRecursiveTargetNodeDependenciesOfTypes(
+                targetGraph,
+                Optional.of(dependenciesCache),
+                AppleBuildRules.RecursiveDependenciesMode.LINKING,
+                targetNode,
+                ImmutableSet.of(PrebuiltCxxLibraryGroupDescription.class)))
+        .append(targetNode)
+        .transformAndConcat(
+            input ->
+                input
+                    .castArg(
+                        AbstractPrebuiltCxxLibraryGroupDescription
+                            .AbstractPrebuiltCxxLibraryGroupDescriptionArg.class)
+                    .map(
+                        x ->
+                            ((AbstractPrebuiltCxxLibraryGroupDescription) input.getDescription())
+                                .getStaticLinkArgs(
+                                    x.getBuildTarget(),
+                                    x.getConstructorArg().getStaticLibs(),
+                                    x.getConstructorArg().getStaticLink()))
+                    .orElse(ImmutableList.of()))
+        .transform(
+            x -> {
+              if (x instanceof SourcePathArg) {
+                return pathRelativizer
+                    .outputPathToSourcePath(((SourcePathArg) x).getPath())
+                    .toString();
+              } else if (x instanceof StringArg) {
+                return ((StringArg) x).getArg();
+              } else {
+                return x.toString();
+              }
+            })
         .toList();
   }
 
