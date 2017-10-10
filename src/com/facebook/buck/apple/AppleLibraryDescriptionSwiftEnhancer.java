@@ -113,7 +113,8 @@ public class AppleLibraryDescriptionSwiftEnhancer {
 
     ImmutableSet.Builder<CxxPreprocessorInput> builder = ImmutableSet.builder();
     builder.addAll(transitiveMap.values());
-    builder.add(lib.getPublicCxxPreprocessorInputExcludingDelegate(platform));
+    // TODO(robbert): Need to query for objc_module headers here
+    //    builder.add(lib.getPublicCxxPreprocessorInputExcludingDelegate(platform));
 
     return builder.build();
   }
@@ -121,6 +122,21 @@ public class AppleLibraryDescriptionSwiftEnhancer {
   public static BuildRule createObjCGeneratedHeaderBuildRule(
       BuildTarget buildTarget,
       ProjectFilesystem projectFilesystem,
+      BuildRuleResolver resolver,
+      CxxPlatform cxxPlatform,
+      HeaderVisibility headerVisibility) {
+    ImmutableMap<Path, SourcePath> headers =
+        getObjCGeneratedHeader(buildTarget, resolver, cxxPlatform, headerVisibility);
+
+    Path outputPath = BuildTargets.getGenPath(projectFilesystem, buildTarget, "%s");
+    HeaderSymlinkTreeWithHeaderMap headerMapRule =
+        HeaderSymlinkTreeWithHeaderMap.create(buildTarget, projectFilesystem, outputPath, headers);
+
+    return headerMapRule;
+  }
+
+  public static ImmutableMap<Path, SourcePath> getObjCGeneratedHeader(
+      BuildTarget buildTarget,
       BuildRuleResolver resolver,
       CxxPlatform cxxPlatform,
       HeaderVisibility headerVisibility) {
@@ -132,13 +148,7 @@ public class AppleLibraryDescriptionSwiftEnhancer {
 
     ImmutableMap.Builder<Path, SourcePath> headerLinks = ImmutableMap.builder();
     headerLinks.put(objCImportPath, objCGeneratedPath);
-
-    Path outputPath = BuildTargets.getGenPath(projectFilesystem, buildTarget, "%s");
-    HeaderSymlinkTreeWithHeaderMap headerMapRule =
-        HeaderSymlinkTreeWithHeaderMap.create(
-            buildTarget, projectFilesystem, outputPath, headerLinks.build());
-
-    return headerMapRule;
+    return headerLinks.build();
   }
 
   private static Path getObjCGeneratedHeaderSourceIncludePath(
