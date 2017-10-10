@@ -48,6 +48,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Optional;
 
 public class AppleLibraryDescriptionSwiftEnhancer {
   @SuppressWarnings("unused")
@@ -113,8 +114,14 @@ public class AppleLibraryDescriptionSwiftEnhancer {
 
     ImmutableSet.Builder<CxxPreprocessorInput> builder = ImmutableSet.builder();
     builder.addAll(transitiveMap.values());
-    // TODO(robbert): Need to query for objc_module headers here
-    //    builder.add(lib.getPublicCxxPreprocessorInputExcludingDelegate(platform));
+
+    // TODO: only if modular else next line
+    // builder.add(lib.getPublicCxxPreprocessorInputExcludingDelegate(platform));
+    Optional<CxxPreprocessorInput> underlyingModule =
+        AppleLibraryDescription.underlyingModuleCxxPreprocessorInput(target, resolver, platform);
+    if (underlyingModule.isPresent()) {
+      builder.add(underlyingModule.get());
+    }
 
     return builder.build();
   }
