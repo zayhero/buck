@@ -704,7 +704,7 @@ public class AppleLibraryDescription
         case APPLE_SWIFT_METADATA:
           {
             AppleLibrarySwiftMetadata metadata =
-                AppleLibrarySwiftMetadata.from(args.getSrcs(), pathResolver);
+                AppleLibrarySwiftMetadata.from(args.getSrcs(), args.isModular(), pathResolver);
             return Optional.of(metadata).map(metadataClass::cast);
           }
 
@@ -835,11 +835,6 @@ public class AppleLibraryDescription
     Optional<SourcePath> getInfoPlist();
 
     ImmutableMap<String, String> getInfoPlistSubstitutions();
-
-    @Value.Default
-    default boolean isModular() {
-      return false;
-    }
   }
 
   // CxxLibraryDescriptionDelegate
@@ -849,6 +844,13 @@ public class AppleLibraryDescription
     Optional<AppleLibrarySwiftMetadata> metadata =
         resolver.requireMetadata(metadataTarget, AppleLibrarySwiftMetadata.class);
     return metadata.map(m -> !m.getSwiftSources().isEmpty()).orElse(false);
+  }
+
+  private static boolean targetIsModular(BuildTarget target, BuildRuleResolver resolver) {
+    BuildTarget metadataTarget = target.withFlavors(MetadataType.APPLE_SWIFT_METADATA.getFlavor());
+    Optional<AppleLibrarySwiftMetadata> metadata =
+        resolver.requireMetadata(metadataTarget, AppleLibrarySwiftMetadata.class);
+    return metadata.map(m -> m.isModular()).orElse(false);
   }
 
   public static Optional<CxxPreprocessorInput> queryMetadataCxxSwiftPreprocessorInput(
@@ -891,7 +893,7 @@ public class AppleLibraryDescription
   @Override
   public Optional<CxxPreprocessorInput> getPrivatePreprocessorInput(
       BuildTarget target, BuildRuleResolver resolver, CxxPlatform platform) {
-    if (!targetContainsSwift(target, resolver)) {
+    if (!targetContainsSwift(target, resolver) || targetIsModular(target, resolver)) {
       return Optional.empty();
     }
 
@@ -902,7 +904,8 @@ public class AppleLibraryDescription
   @Override
   public Optional<HeaderSymlinkTree> getPrivateHeaderSymlinkTree(
       BuildTarget buildTarget, BuildRuleResolver ruleResolver, CxxPlatform cxxPlatform) {
-    if (!targetContainsSwift(buildTarget, ruleResolver)) {
+    if (!targetContainsSwift(buildTarget, ruleResolver)
+        || targetIsModular(buildTarget, ruleResolver)) {
       return Optional.empty();
     }
 
