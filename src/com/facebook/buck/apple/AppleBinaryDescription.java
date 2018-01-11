@@ -384,7 +384,8 @@ public class AppleBinaryDescription
         AppleAssetCatalogsCompilationOptions.builder().build(),
         ImmutableList.of(),
         Optional.empty(),
-        Optional.empty());
+        Optional.empty(),
+        appleConfig.getCodesignTimeoutMs());
   }
 
   private BuildRule createBinary(

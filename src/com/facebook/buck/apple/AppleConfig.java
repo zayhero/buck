@@ -200,6 +200,19 @@ public class AppleConfig implements ConfigView<BuckConfig> {
     }
   }
 
+  /*
+   * Specify the maximum code-signing time before timing out.
+   */
+  public Long getCodesignTimeoutMs() {
+    long timeout = delegate.getLong(APPLE_SECTION, "codesign_timeout").orElse(300000l);
+    if (timeout < 0) {
+      throw new HumanReadableException(
+          "negative timeout (" + timeout + "ms) specified for codesigning");
+    }
+
+    return timeout;
+  }
+
   public Optional<String> getXctoolDefaultDestinationSpecifier() {
     return delegate.getValue(APPLE_SECTION, "xctool_default_destination_specifier");
   }

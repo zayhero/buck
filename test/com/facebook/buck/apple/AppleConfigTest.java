@@ -18,6 +18,8 @@ package com.facebook.buck.apple;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
@@ -164,5 +166,29 @@ public class AppleConfigTest {
     AppleConfig config = buckConfig.getView(AppleConfig.class);
     ZipCompressionLevel compressionLevel = config.getZipCompressionLevel();
     assertEquals(ZipCompressionLevel.DEFAULT, compressionLevel);
+  }
+
+  public void testCodesignTimeoutValues() {
+    /* negative values should throw */
+    AppleConfig config =
+        FakeBuckConfig.builder()
+            .setSections("[apple]", "codesign_timeout = -1")
+            .build()
+            .getView(AppleConfig.class);
+    HumanReadableException exception = null;
+    try {
+      config.getCodesignTimeoutMs();
+    } catch (HumanReadableException e) {
+      exception = e;
+    }
+    assertThat(exception, notNullValue());
+    assertThat(
+        "Should throw exceptions for negative timeouts.",
+        exception.getHumanReadableErrorMessage(),
+        startsWith("negative timeout"));
+
+    /* make sure that we have a sane default of 300s when the value is not specified */
+    config = FakeBuckConfig.builder().build().getView(AppleConfig.class);
+    assertThat(config.getCodesignTimeoutMs(), equalTo(300000l));
   }
 }

@@ -51,6 +51,7 @@ class CodeSignStep implements Step {
   private final Optional<Path> dryRunResultsPath;
   private final ProjectFilesystem filesystem;
   private final ImmutableList<String> codesignFlags;
+  private final long codesignTimeout;
 
   public CodeSignStep(
       ProjectFilesystem filesystem,
@@ -61,7 +62,8 @@ class CodeSignStep implements Step {
       Tool codesign,
       Optional<Tool> codesignAllocatePath,
       Optional<Path> dryRunResultsPath,
-      ImmutableList<String> codesignFlags) {
+      ImmutableList<String> codesignFlags,
+      long codesignTimeout) {
     this.filesystem = filesystem;
     this.resolver = resolver;
     this.pathToSign = pathToSign;
@@ -71,6 +73,7 @@ class CodeSignStep implements Step {
     this.codesignAllocatePath = codesignAllocatePath;
     this.dryRunResultsPath = dryRunResultsPath;
     this.codesignFlags = codesignFlags;
+    this.codesignTimeout = codesignTimeout;
   }
 
   @Override
@@ -117,7 +120,7 @@ class CodeSignStep implements Step {
             processExecutorParams,
             options,
             /* stdin */ Optional.empty(),
-            /* timeOutMs */ Optional.of((long) 300000),
+            /* timeOutMs */ Optional.of(codesignTimeout),
             /* timeOutHandler */ Optional.empty());
 
     if (result.isTimedOut()) {

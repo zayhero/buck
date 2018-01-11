@@ -176,6 +176,8 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
   private final boolean cacheable;
   private final boolean verifyResources;
 
+  private final long codesignTimeout;
+
   AppleBundle(
       BuildTarget buildTarget,
       ProjectFilesystem projectFilesystem,
@@ -204,7 +206,8 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
       boolean verifyResources,
       ImmutableList<String> codesignFlags,
       Optional<String> codesignIdentity,
-      Optional<Boolean> ibtoolModuleFlag) {
+      Optional<Boolean> ibtoolModuleFlag,
+      long codesignTimeout) {
     super(buildTarget, projectFilesystem, params);
     this.extension =
         extension.isLeft() ? extension.getLeft().toFileExtension() : extension.getRight();
@@ -273,6 +276,8 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
         appleCxxPlatform.getSwiftPlatform().isPresent()
             ? appleCxxPlatform.getSwiftPlatform().get().getSwiftStdlibTool()
             : Optional.empty();
+
+    this.codesignTimeout = codesignTimeout;
   }
 
   public static String getBinaryName(BuildTarget buildTarget, Optional<String> productName) {
@@ -671,7 +676,8 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
                 dryRunCodeSigning
                     ? Optional.of(codeSignOnCopyPath.resolve(CODE_SIGN_DRY_RUN_ARGS_FILE))
                     : Optional.empty(),
-                codesignFlags));
+                codesignFlags,
+                codesignTimeout));
       }
 
       stepsBuilder.add(
@@ -686,7 +692,8 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
               dryRunCodeSigning
                   ? Optional.of(bundleRoot.resolve(CODE_SIGN_DRY_RUN_ARGS_FILE))
                   : Optional.empty(),
-              codesignFlags));
+              codesignFlags,
+              codesignTimeout));
     } else {
       addSwiftStdlibStepIfNeeded(
           context.getSourcePathResolver(),

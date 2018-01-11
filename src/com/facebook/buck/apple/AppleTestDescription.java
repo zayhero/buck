@@ -308,7 +308,8 @@ public class AppleTestDescription
             args.getAssetCatalogsCompilationOptions(),
             args.getCodesignFlags(),
             args.getCodesignIdentity(),
-            Optional.empty());
+            Optional.empty(),
+            appleConfig.getCodesignTimeoutMs());
     resolver.addToIndex(bundle);
 
     Optional<SourcePath> xctool = getXctool(projectFilesystem, params, resolver);
