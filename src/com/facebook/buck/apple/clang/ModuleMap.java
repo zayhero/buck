@@ -34,11 +34,12 @@ public class ModuleMap {
 
   private final SwiftMode swiftMode;
   private final String moduleName;
+  private final boolean hasUmbrella;
 
   private String generatedModule;
   private static final String template =
       "module <module_name> {\n"
-          + "    umbrella header \"<module_name>.h\"\n"
+          + "    umbrella header \"<module_header>.h\"\n"
           + "\n"
           + "    export *\n"
           + "    module * { export * }\n"
@@ -58,16 +59,28 @@ public class ModuleMap {
           + "<endif>"
           + "\n";
 
+  public ModuleMap(String moduleName, SwiftMode swiftMode, boolean hasUmbrella) {
+    this.moduleName = moduleName;
+    this.swiftMode = swiftMode;
+    this.hasUmbrella = hasUmbrella;
+  }
+
   public ModuleMap(String moduleName, SwiftMode swiftMode) {
     this.moduleName = moduleName;
     this.swiftMode = swiftMode;
+    this.hasUmbrella = false;
   }
 
   public String render() {
     if (this.generatedModule == null) {
+      String moduleHeader = moduleName;
+      if (hasUmbrella) {
+        moduleHeader += "-umbrella";
+      }
       ST st =
           new ST(template)
               .add("module_name", moduleName)
+              .add("module_header", moduleHeader)
               .add("include_swift_header", false)
               .add("exclude_swift_header", false);
       switch (swiftMode) {

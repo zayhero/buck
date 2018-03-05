@@ -79,6 +79,13 @@ public final class HeaderSymlinkTreeWithModuleMap extends HeaderSymlinkTree {
     ImmutableList.Builder<Step> builder =
         ImmutableList.<Step>builder().addAll(super.getBuildSteps(context, buildableContext));
     if (moduleName.isPresent()) {
+      boolean hasUmbrella = false;
+      for (Path path : paths) {
+        if (path.toString().contains("-umbrella.h")) {
+          hasUmbrella = true;
+          break;
+        }
+      }
       builder.add(
           new WriteFileStep(
               getProjectFilesystem(),
@@ -86,12 +93,17 @@ public final class HeaderSymlinkTreeWithModuleMap extends HeaderSymlinkTree {
                       moduleName.get(),
                       paths.contains(Paths.get(moduleName.get(), moduleName.get() + "-Swift.h"))
                           ? ModuleMap.SwiftMode.INCLUDE_SWIFT_HEADER
-                          : ModuleMap.SwiftMode.NO_SWIFT)
+                          : ModuleMap.SwiftMode.NO_SWIFT,
+                      hasUmbrella)
                   .render(),
               moduleMapPath,
               false));
 
-      Path umbrellaHeaderPath = Paths.get(moduleName.get(), moduleName.get() + ".h");
+      String umbrellaHeader = moduleName.get();
+      if (hasUmbrella) {
+        umbrellaHeader += "-umbrella";
+      }
+      Path umbrellaHeaderPath = Paths.get(moduleName.get(), umbrellaHeader + ".h");
       boolean containsUmbrellaHeader = paths.contains(umbrellaHeaderPath);
       if (!containsUmbrellaHeader) {
         builder.add(
