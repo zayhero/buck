@@ -43,6 +43,7 @@ import com.facebook.buck.rules.args.FileListableLinkerInputArg;
 import com.facebook.buck.rules.args.SourcePathArg;
 import com.facebook.buck.rules.args.StringArg;
 import com.facebook.buck.rules.coercer.FrameworkPath;
+import com.facebook.buck.shell.BashStep;
 import com.facebook.buck.step.ExecutionContext;
 import com.facebook.buck.step.Step;
 import com.facebook.buck.step.StepExecutionResult;
@@ -256,6 +257,14 @@ public class SwiftCompile extends AbstractBuildRuleWithDeclaredAndExtraDeps {
     return !bridgingHeader.isPresent() || swiftBuckConfig.getCompileForceCache();
   }
 
+  private BashStep makeRunscriptStep() {
+    return new BashStep(
+        getBuildTarget(),
+        getProjectFilesystem().getRootPath(),
+        "ios/script/transform_buck_swift_header.py",
+        headerPath.toString());
+  }
+
   @Override
   public ImmutableList<Step> getBuildSteps(
       BuildContext context, BuildableContext buildableContext) {
@@ -268,7 +277,9 @@ public class SwiftCompile extends AbstractBuildRuleWithDeclaredAndExtraDeps {
                 context.getBuildCellRootPath(), getProjectFilesystem(), outputPath)));
     swiftFileListPath.map(
         path -> steps.add(makeFileListStep(context.getSourcePathResolver(), path)));
-    steps.add(makeCompileStep(context.getSourcePathResolver()));
+    steps.add(
+        makeCompileStep(context.getSourcePathResolver()),
+        makeRunscriptStep());
     return steps.build();
   }
 

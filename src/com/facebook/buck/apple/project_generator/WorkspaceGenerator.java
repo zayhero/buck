@@ -173,7 +173,7 @@ class WorkspaceGenerator {
   }
 
   public Path getWorkspaceDir() {
-    return outputDirectory.resolve(workspaceName + ".xcworkspace");
+    return outputDirectory.resolve(workspaceName + "-BUCK.xcworkspace");
   }
 
   public Path writeWorkspace() throws IOException {

@@ -587,6 +587,21 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
 
                     return filesystem.resolve(entitlementsPlistWithSubstitutions);
                   });
+        } else {
+          ProjectFilesystem filesystem = getProjectFilesystem();
+          Path originalEntitlementsPlist = entitlementsPlist.get();
+          Path entitlementsPlistWithSubstitutions =
+              BuildTargets.getScratchPath(
+                  filesystem, getBuildTarget(), "%s-Entitlements.plist");
+          stepsBuilder.add(
+              new FindAndReplaceStep(
+                  filesystem,
+                  originalEntitlementsPlist,
+                  entitlementsPlistWithSubstitutions,
+                  InfoPlistSubstitution.createVariableExpansionFunction(
+                      infoPlistSubstitutions)));
+
+          entitlementsPlist = Optional.of(filesystem.resolve(entitlementsPlistWithSubstitutions));
         }
 
         signingEntitlementsTempPath =

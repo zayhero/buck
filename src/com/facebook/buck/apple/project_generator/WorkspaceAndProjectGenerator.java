@@ -286,7 +286,7 @@ public class WorkspaceAndProjectGenerator {
   private void writeWorkspaceMetaData(Path outputDirectory, String workspaceName)
       throws IOException {
     Path path =
-        combinedProject ? outputDirectory : outputDirectory.resolve(workspaceName + ".xcworkspace");
+        combinedProject ? outputDirectory : outputDirectory.resolve(workspaceName + "-BUCK.xcworkspace");
     rootCell.getFilesystem().mkdirs(path);
     ImmutableList<String> requiredTargetsStrings =
         getRequiredBuildTargets()
@@ -918,6 +918,42 @@ public class WorkspaceAndProjectGenerator {
       } else {
         remoteRunnablePath = Optional.empty();
       }
+
+      HashMap<String, ImmutableSet.Builder<PBXTarget>> schemeDetails = new HashMap<>();
+
+      for (PBXTarget target : orderedBuildTargets) {
+        Path projectPath = targetToProjectPathMap.get(target);
+        String targetName = projectPath.getFileName().toString().split("-BUCK")[0];
+        if (!schemeDetails.containsKey(targetName)) {
+          schemeDetails.put(targetName, new ImmutableSet.Builder<>());
+        }
+        ImmutableSet.Builder<PBXTarget> builder = schemeDetails.get(targetName);
+        builder.add(target);
+        schemeDetails.put(targetName, builder);
+      }
+
+      for (HashMap.Entry<String, ImmutableSet.Builder<PBXTarget>> entry : schemeDetails.entrySet()) {
+        ImmutableSet<PBXTarget> targets = entry.getValue().build();
+
+        SchemeGenerator librarySchemeGen = new SchemeGenerator(
+            rootCell.getFilesystem(),
+            schemeConfigArg.getSrcTarget().map(buildTargetToPBXTarget::get),
+            targets,
+            ImmutableSet.<PBXTarget>of(),
+            ImmutableSet.<PBXTarget>of(),
+            entry.getKey(),
+            targetToProjectPathMap.get(targets.toArray()[0]),
+            parallelizeBuild,
+            runnablePath,
+            remoteRunnablePath,
+            XcodeWorkspaceConfigDescription.getActionConfigNamesFromArg(workspaceArguments),
+            targetToProjectPathMap,
+            schemeConfigArg.getEnvironmentVariables(),
+            schemeConfigArg.getAdditionalSchemeActions(),
+            schemeConfigArg.getLaunchStyle().orElse(XCScheme.LaunchAction.LaunchStyle.AUTO));
+        librarySchemeGen.writeScheme();
+      }
+
       SchemeGenerator schemeGenerator =
           new SchemeGenerator(
               rootCell.getFilesystem(),
@@ -928,7 +964,7 @@ public class WorkspaceAndProjectGenerator {
               schemeName,
               combinedProject
                   ? outputDirectory
-                  : outputDirectory.resolve(workspaceName + ".xcworkspace"),
+                  : outputDirectory.resolve(workspaceName + "-BUCK.xcworkspace"),
               parallelizeBuild,
               runnablePath,
               remoteRunnablePath,

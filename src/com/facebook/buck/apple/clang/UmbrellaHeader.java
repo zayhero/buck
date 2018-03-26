@@ -30,6 +30,7 @@ public class UmbrellaHeader {
   public String render() {
     return headerNames
         .stream()
+        .filter(x -> !x.contains("-Swift.h"))
         .map(x -> String.format("#import <%s/%s>\n", targetName, x))
         .reduce("", String::concat);
   }

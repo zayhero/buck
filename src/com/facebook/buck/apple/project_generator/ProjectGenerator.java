@@ -79,6 +79,8 @@ import com.facebook.buck.cxx.CxxLibraryDescription;
 import com.facebook.buck.cxx.CxxLibraryDescription.CommonArg;
 import com.facebook.buck.cxx.CxxPrecompiledHeaderTemplate;
 import com.facebook.buck.cxx.CxxSource;
+import com.facebook.buck.cxx.PrebuiltCxxLibraryDescription;
+import com.facebook.buck.cxx.PrebuiltCxxLibraryDescriptionArg;
 import com.facebook.buck.cxx.PrebuiltCxxLibraryGroupDescription;
 import com.facebook.buck.cxx.toolchain.CxxBuckConfig;
 import com.facebook.buck.cxx.toolchain.CxxPlatform;
@@ -102,7 +104,6 @@ import com.facebook.buck.js.JsBundleOutputsDescription;
 import com.facebook.buck.log.Logger;
 import com.facebook.buck.model.BuildTarget;
 import com.facebook.buck.model.BuildTargets;
-import com.facebook.buck.model.UnflavoredBuildTarget;
 import com.facebook.buck.model.macros.MacroException;
 import com.facebook.buck.rules.BuildRule;
 import com.facebook.buck.rules.BuildRuleResolver;
@@ -355,7 +356,7 @@ public class ProjectGenerator {
                     buckEventBus)));
     this.buckEventBus = buckEventBus;
 
-    this.projectPath = outputDirectory.resolve(projectName + ".xcodeproj");
+    this.projectPath = outputDirectory.resolve(projectName + "-BUCK.xcodeproj");
     this.pathRelativizer = new PathRelativizer(outputDirectory, this::resolveSourcePath);
 
     LOG.debug(
@@ -1760,7 +1761,8 @@ public class ProjectGenerator {
                     ImmutableSet.of(
                         AppleLibraryDescription.class,
                         CxxLibraryDescription.class,
-                        PrebuiltAppleFrameworkDescription.class))
+                        PrebuiltAppleFrameworkDescription.class,
+                        PrebuiltCxxLibraryDescription.class))
                 .stream())
         // Keep only the ones that may have frameworks and libraries fields.
         .flatMap(input -> RichStream.from(input.castArg(HasSystemFrameworkAndLibraries.class)))
@@ -1812,6 +1814,17 @@ public class ProjectGenerator {
                           iOSLdRunpathSearchPaths.add("@executable_path/Frameworks");
                           macOSLdRunpathSearchPaths.add("@executable_path/../Frameworks");
                         }
+                      });
+
+              castedNode
+                  .castArg(PrebuiltCxxLibraryDescriptionArg.class)
+                  .ifPresent(
+                      prebuilt -> {
+                        librarySearchPaths.add(
+                            "$REPO_ROOT/"
+                                + resolveSourcePath(prebuilt.getConstructorArg().getStaticLib().get())
+                                .getParent()
+                        );
                       });
             });
 
@@ -1933,6 +1946,11 @@ public class ProjectGenerator {
       getXcodeBuildConfigurationsForTargetNode(
           TargetNode<?, ?> targetNode, ImmutableMap<String, String> appendedConfig) {
     Optional<ImmutableSortedMap<String, ImmutableMap<String, String>>> configs = Optional.empty();
+    Optional<ImmutableSortedMap<String, ImmutableMap<String, String>>> defaultConfigs = Optional.empty();
+
+    ImmutableSortedMap.Builder<String, ImmutableMap<String, String>> retConfigs =
+        ImmutableSortedMap.naturalOrder();
+
     Optional<TargetNode<AppleNativeTargetDescriptionArg, ?>> appleTargetNode =
         targetNode.castArg(AppleNativeTargetDescriptionArg.class);
     Optional<TargetNode<HalideLibraryDescriptionArg, ?>> halideTargetNode =
@@ -1942,15 +1960,52 @@ public class ProjectGenerator {
     } else if (halideTargetNode.isPresent()) {
       configs = Optional.of(halideTargetNode.get().getConstructorArg().getConfigs());
     }
-    if (!configs.isPresent()
-        || (configs.isPresent() && configs.get().isEmpty())
-        || targetNode.getDescription() instanceof CxxLibraryDescription) {
-      ImmutableMap<String, ImmutableMap<String, String>> defaultConfig =
-          CxxPlatformXcodeConfigGenerator.getDefaultXcodeBuildConfigurationsFromCxxPlatform(
-              defaultCxxPlatform, appendedConfig);
-      configs = Optional.of(ImmutableSortedMap.copyOf(defaultConfig));
+
+    boolean hasConfig = configs.isPresent() && !configs.get().isEmpty();
+    ImmutableMap<String, ImmutableMap<String, String>> defaultConfig =
+        CxxPlatformXcodeConfigGenerator.getDefaultXcodeBuildConfigurationsFromCxxPlatform(
+            defaultCxxPlatform, appendedConfig);
+    defaultConfigs = Optional.of(ImmutableSortedMap.copyOf(defaultConfig));
+
+    if (!hasConfig) {
+      return defaultConfigs;
     }
-    return configs;
+
+    retConfigs.put(
+        CxxPlatformXcodeConfigGenerator.DEBUG_BUILD_CONFIGURATION_NAME,
+        mergeConfigs(
+            configs.get().get(CxxPlatformXcodeConfigGenerator.DEBUG_BUILD_CONFIGURATION_NAME),
+            defaultConfigs.get().get(CxxPlatformXcodeConfigGenerator.DEBUG_BUILD_CONFIGURATION_NAME))
+    );
+    retConfigs.put(
+        CxxPlatformXcodeConfigGenerator.PROFILE_BUILD_CONFIGURATION_NAME,
+        mergeConfigs(
+            configs.get().get(CxxPlatformXcodeConfigGenerator.PROFILE_BUILD_CONFIGURATION_NAME),
+            defaultConfigs.get().get(CxxPlatformXcodeConfigGenerator.PROFILE_BUILD_CONFIGURATION_NAME))
+    );
+    retConfigs.put(
+        CxxPlatformXcodeConfigGenerator.RELEASE_BUILD_CONFIGURATION_NAME,
+        mergeConfigs(
+            configs.get().get(CxxPlatformXcodeConfigGenerator.RELEASE_BUILD_CONFIGURATION_NAME),
+            defaultConfigs.get().get(CxxPlatformXcodeConfigGenerator.RELEASE_BUILD_CONFIGURATION_NAME))
+    );
+
+    return Optional.of(retConfigs.build());
+  }
+
+  private ImmutableMap<String, String> mergeConfigs(
+      ImmutableMap<String, String> left,
+      ImmutableMap<String, String> right) {
+    ImmutableMap.Builder<String, String> mergedConfigs = ImmutableMap.builder();
+
+    for (Map.Entry<String, String> entry : left.entrySet()) {
+      mergedConfigs.put(entry.getKey(), entry.getValue());
+    }
+    for (Map.Entry<String, String> entry : right.entrySet()) {
+      mergedConfigs.put(entry.getKey(), entry.getValue());
+    }
+
+    return mergedConfigs.build();
   }
 
   private void addEntitlementsPlistIntoTarget(
@@ -2281,17 +2336,25 @@ public class ProjectGenerator {
         projectFilesystem.writeBytesToPath(headerMapBuilder.build().getBytes(), headerMapLocation);
       }
       if (moduleName.isPresent() && resolvedContents.size() > 0) {
+        ImmutableList<String> headerPathStrings =
+            resolvedContents.keySet()
+                .stream()
+                .map(Path::getFileName)
+                .map(Path::toString)
+                .collect(ImmutableList.toImmutableList());
+
         if (shouldGenerateUmbrellaHeaderIfMissing) {
           writeUmbrellaHeaderIfNeeded(
-              moduleName.get(), resolvedContents.keySet(), headerSymlinkTreeRoot);
+              moduleName.get(), headerPathStrings, headerSymlinkTreeRoot);
         }
+        boolean hasUmbrella = headerPathStrings.contains(moduleName.get() + "-umbrella.h");
         boolean containsSwift = !nonSourcePaths.isEmpty();
         if (containsSwift) {
           projectFilesystem.writeContentsToPath(
-              new ModuleMap(moduleName.get(), ModuleMap.SwiftMode.INCLUDE_SWIFT_HEADER).render(),
+              new ModuleMap(moduleName.get(), ModuleMap.SwiftMode.INCLUDE_SWIFT_HEADER, hasUmbrella).render(),
               headerSymlinkTreeRoot.resolve(moduleName.get()).resolve("module.modulemap"));
           projectFilesystem.writeContentsToPath(
-              new ModuleMap(moduleName.get(), ModuleMap.SwiftMode.EXCLUDE_SWIFT_HEADER).render(),
+              new ModuleMap(moduleName.get(), ModuleMap.SwiftMode.EXCLUDE_SWIFT_HEADER, hasUmbrella).render(),
               headerSymlinkTreeRoot.resolve(moduleName.get()).resolve("objc.modulemap"));
 
           Path absoluteModuleRoot =
@@ -2309,7 +2372,7 @@ public class ProjectGenerator {
               getObjcModulemapVFSOverlayLocationFromSymlinkTreeRoot(headerSymlinkTreeRoot));
         } else {
           projectFilesystem.writeContentsToPath(
-              new ModuleMap(moduleName.get(), ModuleMap.SwiftMode.NO_SWIFT).render(),
+              new ModuleMap(moduleName.get(), ModuleMap.SwiftMode.NO_SWIFT, hasUmbrella).render(),
               headerSymlinkTreeRoot.resolve(moduleName.get()).resolve("module.modulemap"));
         }
         Path absoluteModuleRoot =
@@ -2334,15 +2397,10 @@ public class ProjectGenerator {
   }
 
   private void writeUmbrellaHeaderIfNeeded(
-      String moduleName, ImmutableSortedSet<Path> headerPaths, Path headerSymlinkTreeRoot)
+      String moduleName, ImmutableList<String> headerPathStrings, Path headerSymlinkTreeRoot)
       throws IOException {
-    ImmutableList<String> headerPathStrings =
-        headerPaths
-            .stream()
-            .map(Path::getFileName)
-            .map(Path::toString)
-            .collect(ImmutableList.toImmutableList());
-    if (!headerPathStrings.contains(moduleName + ".h")) {
+    if (!headerPathStrings.contains(moduleName + ".h") &&
+        !headerPathStrings.contains(moduleName + "-umbrella.h")) {
       Path umbrellaPath = headerSymlinkTreeRoot.resolve(Paths.get(moduleName, moduleName + ".h"));
       Preconditions.checkState(!projectFilesystem.exists(umbrellaPath));
       projectFilesystem.writeContentsToPath(
@@ -2571,19 +2629,19 @@ public class ProjectGenerator {
 
     ImmutableList.Builder<PBXBuildPhase> phases = ImmutableList.builder();
 
-    ImmutableSetMultimap<CopyFilePhaseDestinationSpec, TargetNode<?, ?>> ruleByDestinationSpec =
+    /* ImmutableSetMultimap<CopyFilePhaseDestinationSpec, TargetNode<?, ?>> ruleByDestinationSpec =
         ruleByDestinationSpecBuilder.build();
 
     // Emit a copy files phase for each destination.
     for (CopyFilePhaseDestinationSpec destinationSpec : ruleByDestinationSpec.keySet()) {
       Iterable<TargetNode<?, ?>> targetNodes = ruleByDestinationSpec.get(destinationSpec);
       phases.add(getSingleCopyFilesBuildPhase(destinationSpec, targetNodes));
-    }
+    } */
 
     return phases.build();
   }
 
-  private PBXCopyFilesBuildPhase getSingleCopyFilesBuildPhase(
+  /* private PBXCopyFilesBuildPhase getSingleCopyFilesBuildPhase(
       CopyFilePhaseDestinationSpec destinationSpec, Iterable<TargetNode<?, ?>> targetNodes) {
     PBXCopyFilesBuildPhase copyFilesBuildPhase = new PBXCopyFilesBuildPhase(destinationSpec);
     HashSet<UnflavoredBuildTarget> frameworkTargets = new HashSet<UnflavoredBuildTarget>();
@@ -2605,13 +2663,13 @@ public class ProjectGenerator {
       copyFilesBuildPhase.getFiles().add(buildFile);
     }
     return copyFilesBuildPhase;
-  }
+  } */
 
   /** Create the project bundle structure and write {@code project.pbxproj}. */
   private void writeProjectFile(PBXProject project) throws IOException {
     XcodeprojSerializer serializer = new XcodeprojSerializer(gidGenerator, project);
     NSDictionary rootObject = serializer.toPlist();
-    Path xcodeprojDir = outputDirectory.resolve(projectName + ".xcodeproj");
+    Path xcodeprojDir = outputDirectory.resolve(projectName + "-BUCK.xcodeproj");
     projectFilesystem.mkdirs(xcodeprojDir);
     Path serializedProject = xcodeprojDir.resolve("project.pbxproj");
     String contentsToWrite = rootObject.toXMLPropertyList();
@@ -2983,6 +3041,7 @@ public class ProjectGenerator {
                 ImmutableSet.<Class<? extends Description<?>>>builder()
                     .addAll(AppleBuildRules.XCODE_TARGET_DESCRIPTION_CLASSES)
                     .add(PrebuiltAppleFrameworkDescription.class)
+                    .add(PrebuiltCxxLibraryDescription.class)
                     .build()))
         .transformAndConcat(
             input -> {
@@ -3005,6 +3064,14 @@ public class ProjectGenerator {
                     ImmutableList.of(
                         FrameworkPath.ofSourcePath(
                             prebuilt.get().getConstructorArg().getFramework())));
+              }
+
+              Optional<TargetNode<PrebuiltCxxLibraryDescriptionArg, ?>> prebuiltCxx =
+                  input.castArg(PrebuiltCxxLibraryDescriptionArg.class);
+              if (prebuiltCxx.isPresent()) {
+                return ImmutableList.of(
+                    FrameworkPath.ofSourcePath(
+                        prebuiltCxx.get().getConstructorArg().getStaticLib().get()));
               }
 
               return ImmutableList.of();
