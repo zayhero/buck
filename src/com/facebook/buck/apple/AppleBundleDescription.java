@@ -178,7 +178,8 @@ public class AppleBundleDescription
         args.getCodesignFlags(),
         args.getCodesignIdentity(),
         args.getIbtoolModuleFlag(),
-        appleConfig.getCodesignTimeoutMs());
+        appleConfig.getCodesignTimeoutMs(),
+        args.getMinDeploymentVersion());
   }
 
   /**

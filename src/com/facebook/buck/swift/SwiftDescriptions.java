@@ -66,9 +66,11 @@ public class SwiftDescriptions {
     if (args instanceof SwiftCommonArg) {
       output.setCompilerFlags(((SwiftCommonArg) args).getSwiftCompilerFlags());
       output.setVersion(((SwiftCommonArg) args).getSwiftVersion());
+      output.setMinDeploymentVersion(((SwiftCommonArg) args).getMinDeploymentVersion());
     } else {
       output.setCompilerFlags(args.getCompilerFlags());
     }
+
     output.setFrameworks(args.getFrameworks());
     output.setLibraries(args.getLibraries());
     output.setDeps(args.getDeps());

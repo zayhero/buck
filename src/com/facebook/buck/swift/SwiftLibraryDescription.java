@@ -304,7 +304,8 @@ public class SwiftLibraryDescription implements Description<SwiftLibraryDescript
           args.getBridgingHeader(),
           preprocessor,
           cxxDeps,
-          false);
+          false,
+          args.getMinDeploymentVersion());
     }
 
     // Otherwise, we return the generic placeholder of this library.
@@ -472,7 +473,8 @@ public class SwiftLibraryDescription implements Description<SwiftLibraryDescript
         args.getBridgingHeader(),
         preprocessor,
         preprocessFlags,
-        importUnderlyingModule);
+        importUnderlyingModule,
+        args.getMinDeploymentVersion());
   }
 
   public static boolean isSwiftTarget(BuildTarget buildTarget) {
@@ -511,5 +513,7 @@ public class SwiftLibraryDescription implements Description<SwiftLibraryDescript
     Optional<SourcePath> getBridgingHeader();
 
     Optional<NativeLinkable.Linkage> getPreferredLinkage();
+
+    Optional<String> getMinDeploymentVersion();
   }
 }

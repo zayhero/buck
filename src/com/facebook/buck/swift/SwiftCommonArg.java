@@ -24,4 +24,6 @@ public interface SwiftCommonArg {
   ImmutableList<StringWithMacros> getSwiftCompilerFlags();
 
   Optional<String> getSwiftVersion();
+
+  Optional<String> getMinDeploymentVersion();
 }

@@ -81,6 +81,7 @@ public class SwiftCompile extends AbstractBuildRuleWithDeclaredAndExtraDeps {
   private final Path modulePath;
   private final ImmutableList<Path> objectPaths;
   private final Optional<Path> swiftFileListPath;
+  private final Optional<String> minDeploymentVersion;
 
   @AddToRuleKey private final ImmutableSortedSet<SourcePath> srcs;
   @AddToRuleKey private final Optional<String> version;
@@ -116,7 +117,8 @@ public class SwiftCompile extends AbstractBuildRuleWithDeclaredAndExtraDeps {
       Optional<SourcePath> bridgingHeader,
       Preprocessor preprocessor,
       PreprocessorFlags cxxDeps,
-      boolean importUnderlyingModule) {
+      boolean importUnderlyingModule,
+      Optional<String> minDeploymentVersion) {
     super(buildTarget, projectFilesystem, params);
     this.cxxPlatform = cxxPlatform;
     this.frameworks = frameworks;
@@ -124,6 +126,7 @@ public class SwiftCompile extends AbstractBuildRuleWithDeclaredAndExtraDeps {
     this.swiftCompiler = swiftCompiler;
     this.outputPath = outputPath;
     this.importUnderlyingModule = importUnderlyingModule;
+    this.minDeploymentVersion = minDeploymentVersion;
     this.headerPath = outputPath.resolve(SwiftDescriptions.toSwiftHeaderName(moduleName) + ".h");
 
     String escapedModuleName = CxxDescriptionEnhancer.normalizeModuleName(moduleName);
@@ -166,7 +169,16 @@ public class SwiftCompile extends AbstractBuildRuleWithDeclaredAndExtraDeps {
 
   private SwiftCompileStep makeCompileStep(SourcePathResolver resolver) {
     ImmutableList.Builder<String> compilerCommand = ImmutableList.builder();
-    compilerCommand.addAll(swiftCompiler.getCommandPrefix(resolver));
+
+    for (String flag : swiftCompiler.getCommandPrefix(resolver)) {
+      if (!minDeploymentVersion.isPresent() || !flag.contains("-apple-")) {
+        compilerCommand.add(flag);
+      } else {
+        String arch = flag.split("-")[0];
+        compilerCommand.add(arch + "-apple-ios" + minDeploymentVersion.get() + ".0");
+      }
+    }
+
 
     if (bridgingHeader.isPresent()) {
       compilerCommand.add(
@@ -257,14 +269,6 @@ public class SwiftCompile extends AbstractBuildRuleWithDeclaredAndExtraDeps {
     return !bridgingHeader.isPresent() || swiftBuckConfig.getCompileForceCache();
   }
 
-  private BashStep makeRunscriptStep() {
-    return new BashStep(
-        getBuildTarget(),
-        getProjectFilesystem().getRootPath(),
-        "ios/script/transform_buck_swift_header.py",
-        headerPath.toString());
-  }
-
   @Override
   public ImmutableList<Step> getBuildSteps(
       BuildContext context, BuildableContext buildableContext) {
@@ -278,8 +282,7 @@ public class SwiftCompile extends AbstractBuildRuleWithDeclaredAndExtraDeps {
     swiftFileListPath.map(
         path -> steps.add(makeFileListStep(context.getSourcePathResolver(), path)));
     steps.add(
-        makeCompileStep(context.getSourcePathResolver()),
-        makeRunscriptStep());
+        makeCompileStep(context.getSourcePathResolver()));
     return steps.build();
   }
 

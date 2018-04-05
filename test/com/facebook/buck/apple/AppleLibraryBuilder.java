@@ -220,4 +220,9 @@ public class AppleLibraryBuilder
     getArgForPopulating().setModuleName(moduleName);
     return this;
   }
+
+  public AppleLibraryBuilder setMinDeploymentVersion(String minDeploymentVersion) {
+    getArgForPopulating().setMinDeploymentVersion(minDeploymentVersion);
+    return this;
+  }
 }

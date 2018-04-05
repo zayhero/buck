@@ -309,7 +309,8 @@ public class AppleTestDescription
             args.getCodesignFlags(),
             args.getCodesignIdentity(),
             Optional.empty(),
-            appleConfig.getCodesignTimeoutMs());
+            appleConfig.getCodesignTimeoutMs(),
+            Optional.empty());
     resolver.addToIndex(bundle);
 
     Optional<SourcePath> xctool = getXctool(projectFilesystem, params, resolver);

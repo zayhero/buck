@@ -567,7 +567,8 @@ public class AppleDescriptions {
       ImmutableList<String> codesignFlags,
       Optional<String> codesignAdhocIdentity,
       Optional<Boolean> ibtoolModuleFlag,
-      long codesignTimeout) {
+      long codesignTimeout,
+      Optional<String> minimumOSVersion) {
     AppleCxxPlatform appleCxxPlatform =
         ApplePlatforms.getAppleCxxPlatformForBuildTarget(
             cxxPlatformFlavorDomain,
@@ -786,7 +787,8 @@ public class AppleDescriptions {
         codesignFlags,
         codesignAdhocIdentity,
         ibtoolModuleFlag,
-        codesignTimeout);
+        codesignTimeout,
+        minimumOSVersion);
   }
 
   private static void addToIndex(BuildRuleResolver resolver, Optional<? extends BuildRule> rule) {

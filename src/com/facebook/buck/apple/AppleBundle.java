@@ -207,7 +207,8 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
       ImmutableList<String> codesignFlags,
       Optional<String> codesignIdentity,
       Optional<Boolean> ibtoolModuleFlag,
-      long codesignTimeout) {
+      long codesignTimeout,
+      Optional<String> minimumOSVersion) {
     super(buildTarget, projectFilesystem, params);
     this.extension =
         extension.isLeft() ? extension.getLeft().toFileExtension() : extension.getRight();
@@ -246,7 +247,10 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
     this.sdkName = sdk.getName();
     this.sdkPath = appleCxxPlatform.getAppleSdkPaths().getSdkPath();
     this.sdkVersion = sdk.getVersion();
-    this.minOSVersion = appleCxxPlatform.getMinVersion();
+    this.minOSVersion = minimumOSVersion.isPresent()
+        ? minimumOSVersion.get()
+        : appleCxxPlatform.getMinVersion();
+
     this.platformBuildVersion = appleCxxPlatform.getBuildVersion();
     this.xcodeBuildVersion = appleCxxPlatform.getXcodeBuildVersion();
     this.xcodeVersion = appleCxxPlatform.getXcodeVersion();
@@ -947,18 +951,22 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
         break;
       case IOS_DEVICE:
         keys.put("CFBundleSupportedPlatforms", new NSArray(new NSString("iPhoneOS")));
+        keys.put("UIDeviceFamily", new NSArray(new NSNumber("1"), new NSNumber("2")));
         break;
       case IOS_SIMULATOR:
         keys.put("CFBundleSupportedPlatforms", new NSArray(new NSString("iPhoneSimulator")));
+        keys.put("UIDeviceFamily", new NSArray(new NSNumber("1"), new NSNumber("2")));
         break;
       case WATCH_DEVICE:
         if (!isLegacyWatchApp()) {
           keys.put("CFBundleSupportedPlatforms", new NSArray(new NSString("WatchOS")));
+          keys.put("UIDeviceFamily", new NSArray(new NSNumber("4")));
         }
         break;
       case WATCH_SIMULATOR:
         if (!isLegacyWatchApp()) {
           keys.put("CFBundleSupportedPlatforms", new NSArray(new NSString("WatchSimulator")));
+          keys.put("UIDeviceFamily", new NSArray(new NSNumber("4")));
         }
         break;
       case TV_DEVICE:
@@ -995,7 +1003,8 @@ public class AppleBundle extends AbstractBuildRuleWithDeclaredAndExtraDeps
       boolean isForPackaging) {
     // It's apparently safe to run this even on a non-swift bundle (in that case, no libs
     // are copied over).
-    if (swiftStdlibTool.isPresent()) {
+    boolean shouldCopySwiftStdlib = !extension.equals(AppleBundleExtension.APPEX.toFileExtension());
+    if (swiftStdlibTool.isPresent() && shouldCopySwiftStdlib) {
       ImmutableList.Builder<String> swiftStdlibCommand = ImmutableList.builder();
       swiftStdlibCommand.addAll(swiftStdlibTool.get().getCommandPrefix(resolver));
       swiftStdlibCommand.add(

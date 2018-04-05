@@ -427,7 +427,8 @@ public class AppleLibraryDescription
         ImmutableList.of(),
         Optional.empty(),
         Optional.empty(),
-        appleConfig.getCodesignTimeoutMs());
+        appleConfig.getCodesignTimeoutMs(),
+        Optional.empty());
   }
 
   /**

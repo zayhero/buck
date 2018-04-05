@@ -31,6 +31,8 @@ public interface HasAppleBundleFields {
 
   Optional<String> getXcodeProductType();
 
+  Optional<String> getMinDeploymentVersion();
+
   ImmutableMap<String, String> getInfoPlistSubstitutions();
 
   @Value.Default
