@@ -151,6 +151,7 @@ public class CxxDescriptionEnhancer {
       SourcePathRuleFinder ruleFinder,
       HeaderMode mode,
       ImmutableMap<Path, SourcePath> headers,
+      Optional<SourcePath> umbrellaHeader,
       HeaderVisibility headerVisibility,
       Flavor... flavors) {
     BuildTarget headerSymlinkTreeTarget =
@@ -159,13 +160,15 @@ public class CxxDescriptionEnhancer {
     Path headerSymlinkTreeRoot =
         CxxDescriptionEnhancer.getHeaderSymlinkTreePath(
             projectFilesystem, buildTarget, headerVisibility, flavors);
+
     return CxxPreprocessables.createHeaderSymlinkTreeBuildRule(
         headerSymlinkTreeTarget,
         projectFilesystem,
         ruleFinder,
         headerSymlinkTreeRoot,
         headers,
-        mode);
+        mode,
+        umbrellaHeader);
   }
 
   public static HeaderSymlinkTree createHeaderSymlinkTree(
@@ -175,6 +178,7 @@ public class CxxDescriptionEnhancer {
       BuildRuleResolver resolver,
       CxxPlatform cxxPlatform,
       ImmutableMap<Path, SourcePath> headers,
+      Optional<SourcePath> umbrellaHeader,
       HeaderVisibility headerVisibility,
       boolean shouldCreateHeadersSymlinks) {
     return createHeaderSymlinkTree(
@@ -183,6 +187,7 @@ public class CxxDescriptionEnhancer {
         ruleFinder,
         getHeaderModeForPlatform(resolver, cxxPlatform, shouldCreateHeadersSymlinks),
         headers,
+        umbrellaHeader,
         headerVisibility,
         cxxPlatform.getFlavor());
   }
@@ -212,6 +217,7 @@ public class CxxDescriptionEnhancer {
                     graphBuilder,
                     cxxPlatform,
                     headers,
+                    Optional.empty(),
                     headerVisibility,
                     shouldCreateHeadersSymlinks));
   }

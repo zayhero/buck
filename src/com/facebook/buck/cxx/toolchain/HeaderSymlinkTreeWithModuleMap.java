@@ -26,6 +26,7 @@ import com.facebook.buck.core.rulekey.AddToRuleKey;
 import com.facebook.buck.core.rules.SourcePathRuleFinder;
 import com.facebook.buck.core.sourcepath.ExplicitBuildTargetSourcePath;
 import com.facebook.buck.core.sourcepath.SourcePath;
+import com.facebook.buck.core.sourcepath.resolver.SourcePathResolver;
 import com.facebook.buck.io.filesystem.ProjectFilesystem;
 import com.facebook.buck.step.Step;
 import com.facebook.buck.step.fs.WriteFileStep;
@@ -39,6 +40,7 @@ import java.util.Optional;
 public final class HeaderSymlinkTreeWithModuleMap extends HeaderSymlinkTree {
 
   @AddToRuleKey private final Optional<String> moduleName;
+  private final Optional<SourcePath> umbrellaHeader;
 
   private HeaderSymlinkTreeWithModuleMap(
       BuildTarget target,
@@ -46,9 +48,11 @@ public final class HeaderSymlinkTreeWithModuleMap extends HeaderSymlinkTree {
       Path root,
       ImmutableMap<Path, SourcePath> links,
       SourcePathRuleFinder ruleFinder,
-      Optional<String> moduleName) {
+      Optional<String> moduleName,
+      Optional<SourcePath> umbrellaHeader) {
     super(target, filesystem, root, links, ruleFinder);
     this.moduleName = moduleName;
+    this.umbrellaHeader = umbrellaHeader;
   }
 
   public static HeaderSymlinkTreeWithModuleMap create(
@@ -56,10 +60,11 @@ public final class HeaderSymlinkTreeWithModuleMap extends HeaderSymlinkTree {
       ProjectFilesystem filesystem,
       Path root,
       ImmutableMap<Path, SourcePath> links,
-      SourcePathRuleFinder ruleFinder) {
+      SourcePathRuleFinder ruleFinder,
+      Optional<SourcePath> umbrellaHeader) {
     Optional<String> moduleName = getModuleName(links);
     return new HeaderSymlinkTreeWithModuleMap(
-        target, filesystem, root, links, ruleFinder, moduleName);
+        target, filesystem, root, links, ruleFinder, moduleName, umbrellaHeader);
   }
 
   @Override
@@ -79,6 +84,16 @@ public final class HeaderSymlinkTreeWithModuleMap extends HeaderSymlinkTree {
     ImmutableSortedSet<Path> paths = getLinks().keySet();
     ImmutableList.Builder<Step> builder =
         ImmutableList.<Step>builder().addAll(super.getBuildSteps(context, buildableContext));
+
+    SourcePathResolver resolver = context.getSourcePathResolver();
+    final Optional<String> umbrellaHeaderString;
+    if (umbrellaHeader.isPresent()) {
+      umbrellaHeaderString = Optional.of(
+          resolver.getRelativePath(umbrellaHeader.get()).getFileName().toString());
+    } else {
+      umbrellaHeaderString = Optional.empty();
+    }
+
     moduleName.ifPresent(
         moduleName -> {
           builder.add(
@@ -89,9 +104,16 @@ public final class HeaderSymlinkTreeWithModuleMap extends HeaderSymlinkTree {
                       moduleName,
                       containsSwiftHeader(paths, moduleName)
                           ? ModuleMap.SwiftMode.INCLUDE_SWIFT_HEADER
-                          : ModuleMap.SwiftMode.NO_SWIFT)));
+                          : ModuleMap.SwiftMode.NO_SWIFT,
+                      umbrellaHeaderString)));
 
-          Path umbrellaHeaderPath = Paths.get(moduleName, moduleName + ".h");
+          Path umbrellaHeaderPath;
+          if (umbrellaHeaderString.isPresent()) {
+            umbrellaHeaderPath = Paths.get(moduleName, umbrellaHeaderString.get());
+          } else {
+            umbrellaHeaderPath = Paths.get(moduleName, moduleName + ".h");
+          }
+
           if (!paths.contains(umbrellaHeaderPath)) {
             builder.add(
                 new WriteFileStep(

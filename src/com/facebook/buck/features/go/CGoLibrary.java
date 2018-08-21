@@ -321,6 +321,7 @@ public class CGoLibrary extends NoopBuildRuleWithDeclaredAndExtraDeps {
         graphBuilder,
         cxxPlatform,
         allHeaders.build(),
+        Optional.empty(),
         HeaderVisibility.PUBLIC,
         true);
   }
